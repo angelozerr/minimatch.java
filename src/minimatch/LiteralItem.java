@@ -1,21 +1,14 @@
 package minimatch;
 
 
-public class LiteralItem extends ParseItem
-{
-	public LiteralItem(String source)
-	{
-		//setSource(source);
+public class LiteralItem extends ParseItem {
+	public LiteralItem(String source) {
+		super(source);
 	}
-	/*@Override
-	public String RegexSource(Options options)
-	{
-		return Regex.Escape(getSource());
-	}
-	@Override
-	public boolean Match(String input, Options options)
-	{
-		return input.equals(getSource(), options.getNoCase() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-	}*/
 
+	@Override
+	public boolean match(String input, Options options) {
+		return options.isNocase() ? input.equalsIgnoreCase(getSource()) : input
+				.equals(getSource());
+	}
 }

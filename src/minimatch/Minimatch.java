@@ -2,9 +2,9 @@ package minimatch;
 
 import static minimatch.StringUtils.matches;
 
-import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Stack;
 import java.util.regex.Pattern;
 
 public class Minimatch {
@@ -32,14 +32,15 @@ public class Minimatch {
 	private boolean negate;
 	private String[] globSet;
 
+	private List<List<ParseItem>> set;
+
 	public Minimatch(String pattern, Options options) {
 		this.pattern = pattern.trim();
 		this.options = getOptions(options);
 
-		// windows support: need to use /, not \
-		// if (path.sep !== '/') {
-		// pattern = pattern.split(path.sep).join('/')
-		// }
+		if (options.isAllowWindowsPaths()) {
+			pattern = pattern.replace("\\", "/");
+		}
 
 		// this.regexp = null
 		this.negate = false;
@@ -90,12 +91,22 @@ public class Minimatch {
 		// return s.split(slashSplit)
 		// })
 		String[][] globParts = globParts(set);
-
-		// this.debug(this.pattern, set)
+		if (options.isDebug()) {
+			this.debug(this.pattern, set);
+		}
 
 		// glob --> regexps
-		List<ParseResult> result = globToRegExps(globParts);
-		System.err.println(result);
+		List<List<ParseItem>> results = globToRegExps(globParts);
+		System.err.println(results);
+
+		// filter out everything that didn't compile properly.
+		/*
+		 * set = set.filter(function (s) { return s.indexOf(false) === -1 })
+		 */
+		if (options.isDebug()) {
+			this.debug(this.pattern, set);
+		}
+		this.set = results;
 
 	}
 
@@ -107,13 +118,16 @@ public class Minimatch {
 		return parts;
 	}
 
-	private List<ParseResult> globToRegExps(String[][] globParts) {
-		String[] part = null;
-		List<ParseResult> parts = new ArrayList<ParseResult>();
+	private List<List<ParseItem>> globToRegExps(String[][] globParts) {
+		String[] s = null;
+		List<List<ParseItem>> parts = new ArrayList<List<ParseItem>>();
+		List<ParseItem> p = null;
 		for (int i = 0; i < globParts.length; i++) {
-			part = globParts[i];
-			for (int j = 0; j < part.length; j++) {
-				parts.add(parse(part[j], false));
+			s = globParts[i];
+			p = new ArrayList<ParseItem>();
+			parts.add(p);
+			for (int j = 0; j < s.length; j++) {
+				p.add(parse(s[j], false).getItem());
 			}
 		}
 		return parts;
@@ -147,14 +161,14 @@ public class Minimatch {
 			return new ParseResult(ParseItem.Empty, false);
 		}
 
-		ParseContext context = new ParseContext();
-		context.re = "";
-		context.hasMagic = options.isNocase();
+		ParseContext ctx = new ParseContext();
+		ctx.re = "";
+		ctx.hasMagic = options.isNocase();
 
 		boolean escaping = false;
 		// ? => one single character
-		Object[] patternListStack = null;
-		Object plType;
+		Stack<PatternListItem> patternListStack = new Stack<PatternListItem>();
+		char plType;
 
 		boolean inClass = false;
 		int reClassStart = -1;
@@ -169,11 +183,11 @@ public class Minimatch {
 		for (int i = 0; i < pattern.length(); i++) {
 			char c = pattern.charAt(i);
 			if (options.isDebug()) {
-				this.debug("%s\t%s %s %j", pattern, i, context.re, c);
+				this.debug("%s\t%s %s %j", pattern, i, ctx.re, c);
 			}
 			// skip over any that are escaped.
 			if (escaping && reSpecials.contains(c)) {
-				context.re += '\\' + c;
+				ctx.re += '\\' + c;
 				escaping = false;
 				continue;
 			}
@@ -186,185 +200,184 @@ public class Minimatch {
 				return null;
 
 			case '\\':
-				clearStateChar(context);
+				clearStateChar(ctx);
 				escaping = true;
 				continue;
-				  // the various stateChar values
-                // for the "extglob" stuff.
-              case '?':
-              case '*':
-              case '+':
-              case '@':
-              case '!':
-            	 if (options.isDebug()) {
-            		 this.debug("%s\t%s %s %j <-- stateChar", pattern, i, context.re, c);
-            	 }
-            	 
-                // all of those are literals inside a class, except that
-                // the glob [!a] means [^a] in regexp
-                if (inClass) {
-                	if (options.isDebug()) {
-                  this.debug("  in class");
-                	}
-                  if (c == '!' && i == classStart + 1) {
-                    c = '^';
-                  }
-                  context.re += c;
-                  continue;
-                }
+				// the various stateChar values
+				// for the "extglob" stuff.
+			case '?':
+			case '*':
+			case '+':
+			case '@':
+			case '!':
+				if (options.isDebug()) {
+					this.debug("%s\t%s %s %j <-- stateChar", pattern, i,
+							ctx.re, c);
+				}
 
-                // if we already have a stateChar, then it means
-                // that there was something like ** or +? in there.
-                // Handle the stateChar, then proceed with this one.
-                if (options.isDebug()) {
-                this.debug("call clearStateChar %j", context.stateChar);
-                }
-                clearStateChar(context);
-                context.stateChar = c;
-                // if extglob is disabled, then +(asdf|foo) isn't a thing.
-                // just clear the statechar *now*, rather than even diving
-                // into
-                // the patternList stuff.
-                if (options.isNoext()) {
-                  clearStateChar(context);
-                }
-                continue;
+				// all of those are literals inside a class, except that
+				// the glob [!a] means [^a] in regexp
+				if (inClass) {
+					if (options.isDebug()) {
+						this.debug("  in class");
+					}
+					if (c == '!' && i == classStart + 1) {
+						c = '^';
+					}
+					ctx.re += c;
+					continue;
+				}
 
-              case '(':
-                if (inClass) {
-                  context.re += "(";
-                  continue;
-                }
+				// if we already have a stateChar, then it means
+				// that there was something like ** or +? in there.
+				// Handle the stateChar, then proceed with this one.
+				if (options.isDebug()) {
+					this.debug("call clearStateChar %j", ctx.stateChar);
+				}
+				clearStateChar(ctx);
+				ctx.stateChar = c;
+				// if extglob is disabled, then +(asdf|foo) isn't a thing.
+				// just clear the statechar *now*, rather than even diving
+				// into
+				// the patternList stuff.
+				if (options.isNoext()) {
+					clearStateChar(ctx);
+				}
+				continue;
 
-                if (context.stateChar != null) {
-                	context.re += "\\(";
-                  continue;
-                }
+			case '(':
+				if (inClass) {
+					ctx.re += "(";
+					continue;
+				}
 
-                plType = context.stateChar;
-                patternListStack.push({
-                  type : plType,
-                  start : i - 1,
-                  reStart : re.length
-                });
-                // negation is (?:(?!js)[^/]*)
-                context.re += context.stateChar == '!' ? "(?:(?!" : "(?:";
-                if (options.isDebug()) {
-                this.debug("plType %j %j", context.stateChar, context.re);
-                }
-                context.stateChar = null; //false;
-                continue;
+				if (ctx.stateChar != null) {
+					ctx.re += "\\(";
+					continue;
+				}
 
-              case ')':
-                if (inClass || !patternListStack.length) {
-                	context.re += "\\)";
-                  continue;
-                }
+				plType = ctx.stateChar;
+				patternListStack.push(new PatternListItem(plType, i - 1, ctx.re
+						.length()));
 
-                clearStateChar(context);
-                context.hasMagic = true;
-                context.re += ")";
-                plType = patternListStack.pop().type;
-                // negation is (?:(?!js)[^/]*)
-                // The others are (?:<pattern>)<type>
-                switch (plType) {
-                case '!':
-                  re += '[^/]*?)'
-                  break
-                case '?':
-                case '+':
-                case '*':
-                  re += plType
-                  break
-                case '@':
-                  break // the default anyway
-                }
-                continue
+				// negation is (?:(?!js)[^/]*)
+				ctx.re += ctx.stateChar == '!' ? "(?:(?!" : "(?:";
+				if (options.isDebug()) {
+					this.debug("plType %j %j", ctx.stateChar, ctx.re);
+				}
+				ctx.stateChar = null; // false;
+				continue;
 
-              case '|':
-                if (inClass || !patternListStack.length || escaping) {
-                  re += '\\|'
-                  escaping = false
-                  continue
-                }
+			case ')':
+				if (inClass || patternListStack.size() == 0) {
+					ctx.re += "\\)";
+					continue;
+				}
 
-                clearStateChar()
-                re += '|'
-                continue
+				clearStateChar(ctx);
+				ctx.hasMagic = true;
+				ctx.re += ")";
+				plType = patternListStack.pop().type;
+				// negation is (?:(?!js)[^/]*)
+				// The others are (?:<pattern>)<type>
+				switch (plType) {
+				case '!':
+					ctx.re += "[^/]*?)";
+					break;
+				case '?':
+				case '+':
+				case '*':
+					ctx.re += plType;
+					break;
+				case '@':
+					break; // the default anyway
+				}
+				continue;
 
-                // these are mostly the same in regexp and glob
-              case '[':
-                // swallow any state-tracking char before the [
-                clearStateChar()
+			case '|':
+				if (inClass || patternListStack.size() == 0 || escaping) {
+					ctx.re += "\\|";
+					escaping = false;
+					continue;
+				}
 
-                if (inClass) {
-                  re += '\\' + c
-                  continue
-                }
+				clearStateChar(ctx);
+				ctx.re += '|';
+				continue;
 
-                inClass = true
-                classStart = i
-                reClassStart = re.length
-                re += c
-                continue
+				// these are mostly the same in regexp and glob
+			case '[':
+				// swallow any state-tracking char before the [
+				clearStateChar(ctx);
 
-              case ']':
-                // a right bracket shall lose its special
-                // meaning and represent itself in
-                // a bracket expression if it occurs
-                // first in the list. -- POSIX.2 2.8.3.2
-                if (i == classStart + 1 || !inClass) {
-                  re += "\\" + c;
-                  escaping = false;
-                  continue;
-                }
+				if (inClass) {
+					ctx.re += '\\' + c;
+					continue;
+				}
 
-                // handle the case where we left a class open.
-                // "[z-a]" is valid, equivalent to "\[z-a\]"
-                if (inClass) {
-                  // split where the last [ was, make sure we don't have
-                  // an invalid re. if so, re-walk the contents of the
-                  // would-be class to re-translate any characters that
-                  // were passed through as-is
-                  // TODO: It would probably be faster to determine this
-                  // without a try/catch and a new RegExp, but it's tricky
-                  // to do safely. For now, this is safe and works.
-                  String cs = pattern.substring(classStart + 1, i);
-                  try {
-                    //RegExp('[' + cs + ']');
-                	  Pattern.compile("[" + cs + "]");
-                  } catch (Throwable e) {
-                    // not a valid class!
-                    var sp = this.parse(cs, SUBPARSE);
-                    re = re.substr(0, reClassStart) + '\\[' + sp[0]
-                        + '\\]'
-                    hasMagic = hasMagic || sp[1];
-                    inClass = false;
-                    continue;
-                  }
-                }
+				inClass = true;
+				classStart = i;
+				reClassStart = ctx.re.length();
+				ctx.re += c;
+				continue;
 
-                // finish up the class.
-                hasMagic = true;
-                inClass = false;
-context.re += c;
-                continue;
+			case ']':
+				// a right bracket shall lose its special
+				// meaning and represent itself in
+				// a bracket expression if it occurs
+				// first in the list. -- POSIX.2 2.8.3.2
+				if (i == classStart + 1 || !inClass) {
+					ctx.re += "\\" + c;
+					escaping = false;
+					continue;
+				}
 
-              default:
-                // swallow any state char that wasn't consumed
-                clearStateChar(context);
+				// handle the case where we left a class open.
+				// "[z-a]" is valid, equivalent to "\[z-a\]"
+				if (inClass) {
+					// split where the last [ was, make sure we don't have
+					// an invalid re. if so, re-walk the contents of the
+					// would-be class to re-translate any characters that
+					// were passed through as-is
+					// TODO: It would probably be faster to determine this
+					// without a try/catch and a new RegExp, but it's tricky
+					// to do safely. For now, this is safe and works.
+					String cs = pattern.substring(classStart + 1, i);
+					try {
+						// RegExp('[' + cs + ']');
+						Pattern.compile("[" + cs + "]");
+					} catch (Throwable e) {
+						// not a valid class!
+						ParseResult sp = this.parse(cs, true);
+						ctx.re = ctx.re.substring(0, reClassStart) + "\\["
+								+ sp.getItem() + "\\]";
+						ctx.hasMagic = ctx.hasMagic || sp.isB();
+						inClass = false;
+						continue;
+					}
+				}
 
-                if (escaping) {
-                  // no need
-                  escaping = false;
-                } else if (reSpecials[c] && !(c == '^' && inClass)) {
-                  re += "\\";
-                }
+				// finish up the class.
+				ctx.hasMagic = true;
+				inClass = false;
+				ctx.re += c;
+				continue;
 
-                re += c;
+			default:
+				// swallow any state char that wasn't consumed
+				clearStateChar(ctx);
 
-              } // switch
-            } // for
+				if (escaping) {
+					// no need
+					escaping = false;
+				} else if (reSpecials.contains(c) && !(c == '^' && inClass)) {
+					ctx.re += "\\";
+				}
+
+				ctx.re += c;
+
+			} // switch
+		} // for
 
 		// handle the case where we left a class open.
 		// "[abc" is valid, equivalent to "\[abc"
@@ -374,36 +387,114 @@ context.re += c;
 			// the contents of the would-be class to re-translate
 			// any characters that were passed through as-is
 			String cs = pattern.substring(classStart + 1);
-			// String sp = this.parse(cs, true);
-			// re = re.substring(0, reClassStart) + "\\[" + sp[0];
-			// hasMagic = hasMagic || sp[1];
+			ParseResult sp = this.parse(cs, true);
+			ctx.re = ctx.re.substring(0, reClassStart) + "\\[" + sp.getItem();
+			ctx.hasMagic = ctx.hasMagic || sp.isB();
 		}
 
-		return null;
+		// handle the case where we had a +( thing at the *end*
+		// of the pattern.
+		// each pattern list stack adds 3 chars, and we need to go through
+		// and escape any | chars that were passed through as-is for the regexp.
+		// Go through and escape them, taking care not to double-escape any
+		// | chars that were already escaped.
+		while (!patternListStack.isEmpty()) {
+			PatternListItem pl = patternListStack.pop();
+			String tail = ""; // re.slice(pl.reStart + 3);
+			// maybe some even number of \, then maybe 1 \, followed by a |
+			/*
+			 * tail = tail.replace(/((?:\\{2})*)(\\?)\|/g, function (_, $1, $2)
+			 * { if (!$2) { // the | isn't already escaped, so escape it. $2 =
+			 * '\\'; }
+			 * 
+			 * // need to escape all those slashes *again*, without escaping the
+			 * // one that we need for escaping the | character. As it works
+			 * out, // escaping an even number of slashes can be done by simply
+			 * repeating // it exactly after itself. That's why this trick
+			 * works. // // I am sorry that you have to see this. return $1 + $1
+			 * + $2 + '|'; })
+			 */
+
+			if (options.isDebug()) {
+				this.debug("tail=%j\n   %s", tail, tail);
+			}
+			String t = "*".equals(pl.type) ? star : "?".equals(pl.type) ? qmark
+					: "\\" + pl.type;
+
+			ctx.hasMagic = true;
+			// ctx.re = ctx.re.slice(0, pl.reStart) + t + "\\(" + tail;
+		}
+
+		// handle trailing things that only matter at the very end.
+		clearStateChar(ctx);
+		if (escaping) {
+			// trailing \\
+			ctx.re += "\\\\";
+		}
+
+		// only need to apply the nodot start if the re starts with
+		// something that could conceivably capture a dot
+		boolean addPatternStart = false;
+		switch (ctx.re.charAt(0)) {
+		case '.':
+		case '[':
+		case '(':
+			addPatternStart = true;
+		}
+
+		// if the re is not "" at this point, then we need to make sure
+		// it doesn't match against an empty path part.
+		// Otherwise a/* will match a/, which it should not.
+		if (ctx.re != "" && ctx.hasMagic)
+			ctx.re = "(?=.)" + ctx.re;
+
+		if (addPatternStart)
+			ctx.re = patternStart + ctx.re;
+
+		// parsing just a piece of a larger pattern.
+		if (isSub) {
+			return new ParseResult(new LiteralItem(ctx.re), ctx.hasMagic);
+		}
+
+		// skip the regexp for non-magical patterns
+		// unescape anything in it, though, so that it'll be
+		// an exact match against a file etc.
+		if (!ctx.hasMagic) {
+			return new ParseResult(new LiteralItem(globUnescape(pattern)),
+					false);
+		}
+
+		// var flags = options.nocase ? 'i' : ''
+		// var regExp = new RegExp('^' + re + '$', flags)
+
+		// regExp._glob = pattern
+		// regExp._src = re
+
+		return new ParseResult(new MagicItem(ctx.re, options), false);
 	}
 
 	private void debug(String pattern, Object... arguments) {
 		this.options.getDebugger().debug(pattern, arguments);
 	}
 
-	private void clearStateChar(ParseContext context) {
-		if (context.stateChar != null) {
+	private void clearStateChar(ParseContext ctx) {
+		if (ctx.stateChar != null) {
 			// we had some state-tracking character
 			// that wasn't consumed by this pass.
-			switch (context.stateChar) {
+			switch (ctx.stateChar) {
 			case '*':
-				context.re += star;
-				context.hasMagic = true;
+				ctx.re += star;
+				ctx.hasMagic = true;
 				break;
 			case '?':
-				context.re += qmark;
-				context.hasMagic = true;
+				ctx.re += qmark;
+				ctx.hasMagic = true;
 				break;
 			default:
-				context.re += "\\" + context.stateChar;
+				ctx.re += "\\" + ctx.stateChar;
 				break;
 			}
-			context.stateChar = null;
+			ctx.stateChar = null;
 		}
 	}
 
@@ -428,10 +519,6 @@ context.re += c;
 		this.negate = negate;
 	}
 
-	// private Object braceExpand() {
-	// return braceExpand(null, null);
-	// }
-
 	private String[] braceExpand(String pattern, Options options) {
 		if (options.isNobrace() || !matches(hasBraces, pattern)) {
 			// shortcut. no need to expand.
@@ -440,7 +527,7 @@ context.re += c;
 		return expand(pattern);
 	}
 
-	private String[] expand(String pattern2) {
+	private String[] expand(String pattern) {
 		// TODO Auto-generated method stub
 		return null;
 	}
@@ -463,14 +550,260 @@ context.re += c;
 			return "".equals(p);
 		}
 
-		return new Minimatch(pattern, options).match(p);
+		return new Minimatch(pattern, options).match(p, false);
 	}
 
-	public boolean match(String p) {
-		return false;
+	public boolean match(String input, boolean partial) {
+		if (options.isDebug()) {
+			this.debug("match", input, this.pattern);
+		}
+		// short-circuit in the case of busted things.
+		// comments, etc.
+		if (this.comment)
+			return false;
+		if (this.empty)
+			return StringUtils.isEmpty(input);
+
+		if ("/".equals(input) && partial)
+			return true;
+
+		Options options = this.options;
+
+		// windows: need to use /, not \
+		if (options.isAllowWindowsPaths()) {
+			input = input.replace("\\", "/");
+		}
+
+		// treat the test path as a set of pathparts.
+		String[] f = input.split(slashSplit);
+		if (options.isDebug()) {
+			this.debug(this.pattern, "split", f);
+		}
+		// just ONE of the pattern sets in this.set needs to match
+		// in order for it to be valid. If negating, then just one
+		// match means that we have failed.
+		// Either way, return on the first hit.
+
+		List<List<ParseItem>> set = this.set;
+		if (options.isDebug()) {
+			this.debug(this.pattern, "set", set);
+		}
+		// Find the basename of the path by looking for the last non-empty
+		// segment
+		String filename = null;
+		int i;
+		for (i = f.length - 1; i >= 0; i--) {
+			filename = f[i];
+			// if (filename) break;
+			if (!StringUtils.isEmpty(filename))
+				break;
+		}
+
+		for (i = 0; i < set.size(); i++) {
+			List<ParseItem> pattern = set.get(i);
+			String[] file = f;
+			// if (options.isMatchBase() && pattern.size() == 1) {
+			file = new String[] { filename };
+			// }
+			boolean hit = this.matchOne(file, pattern, partial);
+			if (hit) {
+				if (options.isFlipNegate())
+					return true;
+				return !this.negate;
+			}
+		}
+
+		// didn't get any hits. this is success if it's a negative
+		// pattern, failure otherwise.
+		if (options.isFlipNegate())
+			return false;
+		return this.negate;
 	}
 
 	private static Options getOptions(Options options) {
 		return options == null ? Options.DEFAULT : options;
+	}
+
+	// set partial to true to test if, for example,
+	// "/a/b" matches the start of "/*/b/*/d"
+	// Partial means, if you run out of file before you run
+	// out of pattern, then that's fine, as long as all
+	// the parts match.
+	public boolean matchOne(String[] file, List<ParseItem> pattern,
+			boolean partial) {
+		Options options = this.options;
+
+		if (options.isDebug()) {
+			// //this.debug('matchOne',
+			// // { 'this': this, file: file, pattern: pattern })
+			this.debug("matchOne", file.length, pattern.size());
+		}
+
+		int fi = 0, pi = 0, fl = file.length, pl = pattern.size();
+		for (; (fi < fl) && (pi < pl); fi++, pi++) {
+			if (options.isDebug()) {
+				this.debug("matchOne loop");
+			}
+			ParseItem p = pattern.get(pi);
+			String f = file[fi];
+
+			// this.debug(pattern, p, f);
+
+			// should be impossible.
+			// some invalid regexp stuff in the set.
+			if (p == null) {
+				return false;
+			}
+
+			if (p instanceof GlobStar) {
+				if (options.isDebug()) {
+					this.debug("GLOBSTAR", pattern, p, f);
+				}
+				// "**"
+				// a/**/b/**/c would match the following:
+				// a/b/x/y/z/c
+				// a/x/y/z/b/c
+				// a/b/x/b/x/c
+				// a/b/c
+				// To do this, take the rest of the pattern after
+				// the **, and see if it would match the file remainder.
+				// If so, return success.
+				// If not, the ** "swallows" a segment, and try again.
+				// This is recursively awful.
+				//
+				// a/**/b/**/c matching a/b/x/y/z/c
+				// - a matches a
+				// - doublestar
+				// - matchOne(b/x/y/z/c, b/**/c)
+				// - b matches b
+				// - doublestar
+				// - matchOne(x/y/z/c, c) -> no
+				// - matchOne(y/z/c, c) -> no
+				// - matchOne(z/c, c) -> no
+				// - matchOne(c, c) yes, hit
+				int fr = fi;
+				int pr = pi + 1;
+				if (pr == pl) {
+					if (options.isDebug()) {
+						this.debug("** at the end");
+					}
+					// a ** at the end will just swallow the rest.
+					// We have found a match.
+					// however, it will not swallow /.x, unless
+					// options.dot is set.
+					// . and .. are *never* matched by **, for explosively
+					// exponential reasons.
+					for (; fi < fl; fi++) {
+						if (file[fi].equals(".")
+								|| file[fi].equals("..")
+								|| (!options.isDot() && file[fi].charAt(0) == '.'))
+							return false;
+					}
+					return true;
+				}
+
+				// ok, let's see if we can swallow whatever we can.
+				while (fr < fl) {
+					String swallowee = file[fr];
+
+					if (options.isDebug()) {
+						this.debug("\nglobstar while", file, fr, pattern, pr,
+								swallowee);
+					}
+					// XXX remove this slice. Just pass the start index.
+					//if (this.matchOne(file.slice(fr), pattern.slice(pr),
+					//		partial)) {
+					if (false) {
+						if (options.isDebug()) {
+							this.debug("globstar found match!", fr, fl,
+									swallowee);
+						}
+						// found a match.
+						return true;
+					} else {
+						// can't swallow "." or ".." ever.
+						// can only swallow ".foo" when explicitly asked.
+						if (swallowee.equals(".")
+								|| swallowee.equals("..")
+								|| (!options.isDot() && swallowee.charAt(0) == '.')) {
+							if (options.isDebug()) {
+								this.debug("dot detected!", file, fr, pattern,
+										pr);
+							}
+							break;
+						}
+
+						// ** swallows a segment, and continue.
+						if (options.isDebug()) {
+							this.debug("globstar swallow a segment, and continue");
+						}
+						fr++;
+					}
+				}
+
+				// no match was found.
+				// However, in partial mode, we can't say this is necessarily
+				// over.
+				// If there's more *pattern* left, then
+				if (partial) {
+					// ran out of file
+					if (options.isDebug()) {
+						this.debug("\n>>> no match, partial?", file, fr,
+								pattern, pr);
+					}
+					if (fr == fl)
+						return true;
+				}
+				return false;
+			}
+
+			// something other than **
+			// non-magic patterns just have to match exactly
+			// patterns with magic have been turned into regexps.
+			if (!p.match(f, options)) {
+				return false;
+			}
+
+		}
+		// Note: ending in / means that we'll get a final ""
+		// at the end of the pattern. This can only match a
+		// corresponding "" at the end of the file.
+		// If the file ends in /, then it can only match a
+		// a pattern that ends in /, unless the pattern just
+		// doesn't have any more for it. But, a/b/ should *not*
+		// match "a/b/*", even though "" matches against the
+		// [^/]*? pattern, except in partial mode, where it might
+		// simply not be reached yet.
+		// However, a/b/ should still satisfy a/*
+
+		// now either we fell off the end of the pattern, or we're done.
+		if (fi == fl && pi == pl) {
+			// ran out of pattern and filename at the same time.
+			// an exact hit!
+			return true;
+		} else if (fi == fl) {
+			// ran out of file, but still had pattern left.
+			// this is ok if we're doing the match as part of
+			// a glob fs traversal.
+			return partial;
+		} else if (pi == pl) {
+			// ran out of pattern, still have file left.
+			// this is only acceptable if we're on the very last
+			// empty segment of a file with a trailing slash.
+			// a/* should match a/b/
+			boolean emptyFileEnd = (fi == fl - 1) && (file[fi].equals(""));
+			return emptyFileEnd;
+		}
+
+		// should be unreachable.
+		throw new IllegalStateException("wtf?");
+	}
+
+	// replace stuff like \* with *
+	// private static final Pattern globUnescaper = Pattern.compile("\\(.)");
+
+	static String globUnescape(String s) {
+		return s.replaceAll("\\(.)", "$1");
+		// return globUnescaper.replace(s, "$1");
 	}
 }

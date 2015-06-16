@@ -4,6 +4,7 @@ public class Options {
 
 	public static final Options DEFAULT = new Options();
 
+	private boolean allowWindowsPaths;
 	private boolean nocomment;
 	private boolean nonegate;
 	private boolean nobrace;
@@ -11,8 +12,18 @@ public class Options {
 	private boolean nocase;
 	private boolean dot;
 	private boolean noext;
+	private boolean matchBase;
+	private boolean flipNegate;
 
 	private Debugger debugger;
+
+	public boolean isAllowWindowsPaths() {
+		return allowWindowsPaths;
+	}
+
+	public void setAllowWindowsPaths(boolean allowWindowsPaths) {
+		this.allowWindowsPaths = allowWindowsPaths;
+	}
 
 	public boolean isNocomment() {
 		return nocomment;
@@ -72,6 +83,22 @@ public class Options {
 
 	public boolean isDebug() {
 		return debugger != null;
+	}
+
+	public boolean isMatchBase() {
+		return matchBase;
+	}
+
+	public void setMatchBase(boolean matchBase) {
+		this.matchBase = matchBase;
+	}
+
+	public boolean isFlipNegate() {
+		return flipNegate;
+	}
+
+	public void setFlipNegate(boolean flipNegate) {
+		this.flipNegate = flipNegate;
 	}
 
 	public Debugger getDebugger() {
