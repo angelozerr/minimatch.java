@@ -1,11 +1,22 @@
 package minimatch;
 
-import static minimatch.StringUtils.matches;
+import static minimatch.internal.StringUtils.matches;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Stack;
 import java.util.regex.Pattern;
+
+import minimatch.internal.GlobStar;
+import minimatch.internal.LiteralItem;
+import minimatch.internal.MagicItem;
+import minimatch.internal.ParseContext;
+import minimatch.internal.ParseItem;
+import minimatch.internal.ParseResult;
+import minimatch.internal.PatternListItem;
+import minimatch.internal.StringUtils;
 
 public class Minimatch {
 
@@ -34,11 +45,15 @@ public class Minimatch {
 
 	private List<List<ParseItem>> set;
 
+	public Minimatch(String pattern) {
+		this(pattern, null);
+	}
+
 	public Minimatch(String pattern, Options options) {
 		this.pattern = pattern.trim();
 		this.options = getOptions(options);
 
-		if (options.isAllowWindowsPaths()) {
+		if (this.options.isAllowWindowsPaths()) {
 			pattern = pattern.replace("\\", "/");
 		}
 
@@ -550,7 +565,11 @@ public class Minimatch {
 			return "".equals(p);
 		}
 
-		return new Minimatch(pattern, options).match(p, false);
+		return new Minimatch(pattern, options).match(p);
+	}
+
+	public boolean match(String p) {
+		return match(p, false);
 	}
 
 	public boolean match(String input, boolean partial) {
@@ -575,7 +594,7 @@ public class Minimatch {
 		}
 
 		// treat the test path as a set of pathparts.
-		String[] f = input.split(slashSplit);
+		List<String> f = Arrays.asList(input.split(slashSplit));
 		if (options.isDebug()) {
 			this.debug(this.pattern, "split", f);
 		}
@@ -592,8 +611,8 @@ public class Minimatch {
 		// segment
 		String filename = null;
 		int i;
-		for (i = f.length - 1; i >= 0; i--) {
-			filename = f[i];
+		for (i = f.size() - 1; i >= 0; i--) {
+			filename = f.get(i);
 			// if (filename) break;
 			if (!StringUtils.isEmpty(filename))
 				break;
@@ -601,10 +620,11 @@ public class Minimatch {
 
 		for (i = 0; i < set.size(); i++) {
 			List<ParseItem> pattern = set.get(i);
-			String[] file = f;
-			// if (options.isMatchBase() && pattern.size() == 1) {
-			file = new String[] { filename };
-			// }
+			List<String> file = f;
+			if (options.isMatchBase() && pattern.size() == 1) {
+				file = new ArrayList<String>();
+				file.add(filename);
+			}
 			boolean hit = this.matchOne(file, pattern, partial);
 			if (hit) {
 				if (options.isFlipNegate())
@@ -629,23 +649,23 @@ public class Minimatch {
 	// Partial means, if you run out of file before you run
 	// out of pattern, then that's fine, as long as all
 	// the parts match.
-	public boolean matchOne(String[] file, List<ParseItem> pattern,
+	public boolean matchOne(List<String> file, List<ParseItem> pattern,
 			boolean partial) {
 		Options options = this.options;
 
 		if (options.isDebug()) {
 			// //this.debug('matchOne',
 			// // { 'this': this, file: file, pattern: pattern })
-			this.debug("matchOne", file.length, pattern.size());
+			this.debug("matchOne", file.size(), pattern.size());
 		}
 
-		int fi = 0, pi = 0, fl = file.length, pl = pattern.size();
+		int fi = 0, pi = 0, fl = file.size(), pl = pattern.size();
 		for (; (fi < fl) && (pi < pl); fi++, pi++) {
 			if (options.isDebug()) {
 				this.debug("matchOne loop");
 			}
 			ParseItem p = pattern.get(pi);
-			String f = file[fi];
+			String f = file.get(fi);
 
 			// this.debug(pattern, p, f);
 
@@ -694,9 +714,10 @@ public class Minimatch {
 					// . and .. are *never* matched by **, for explosively
 					// exponential reasons.
 					for (; fi < fl; fi++) {
-						if (file[fi].equals(".")
-								|| file[fi].equals("..")
-								|| (!options.isDot() && file[fi].charAt(0) == '.'))
+						String fileitem = file.get(fi);
+						if (fileitem.equals(".")
+								|| fileitem.equals("..")
+								|| (!options.isDot() && fileitem.charAt(0) == '.'))
 							return false;
 					}
 					return true;
@@ -704,16 +725,15 @@ public class Minimatch {
 
 				// ok, let's see if we can swallow whatever we can.
 				while (fr < fl) {
-					String swallowee = file[fr];
+					String swallowee = file.get(fr);
 
 					if (options.isDebug()) {
 						this.debug("\nglobstar while", file, fr, pattern, pr,
 								swallowee);
 					}
 					// XXX remove this slice. Just pass the start index.
-					//if (this.matchOne(file.slice(fr), pattern.slice(pr),
-					//		partial)) {
-					if (false) {
+					if (this.matchOne(file.subList(fr, file.size()),
+							pattern.subList(pr, pattern.size()), partial)) {
 						if (options.isDebug()) {
 							this.debug("globstar found match!", fr, fl,
 									swallowee);
@@ -791,7 +811,7 @@ public class Minimatch {
 			// this is only acceptable if we're on the very last
 			// empty segment of a file with a trailing slash.
 			// a/* should match a/b/
-			boolean emptyFileEnd = (fi == fl - 1) && (file[fi].equals(""));
+			boolean emptyFileEnd = (fi == fl - 1) && (file.get(fi).equals(""));
 			return emptyFileEnd;
 		}
 

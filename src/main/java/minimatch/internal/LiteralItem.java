@@ -1,4 +1,6 @@
-package minimatch;
+package minimatch.internal;
+
+import minimatch.Options;
 
 
 public class LiteralItem extends ParseItem {

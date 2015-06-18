@@ -1,4 +1,4 @@
-package minimatch;
+package minimatch.internal;
 
 import java.util.ArrayList;
 import java.util.List;

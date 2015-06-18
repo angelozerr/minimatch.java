@@ -1,7 +1,9 @@
-package minimatch;
+package minimatch.internal;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import minimatch.Options;
 
 public class MagicItem extends ParseItem {
 
