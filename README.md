@@ -10,11 +10,11 @@ Port of Node.js' [minimatch](https://github.com/isaacs/minimatch) to Java.
 import minimatch.Minimatch;
 ...
 
-boolean result = Minimatch.minimatch("bar.foo", "*.foo", options); // return true
+boolean result = Minimatch.minimatch("bar.foo", "*.foo"); // return true
 
-boolean result = Minimatch.minimatch("js/test.js", "**/**.js", options); // return true
+boolean result = Minimatch.minimatch("js/test.js", "**/**.js"); // return true
 
-boolean result = Minimatch.minimatch("js/test.html", "**/**.js", options); // return false
+boolean result = Minimatch.minimatch("js/test.html", "**/**.js"); // return false
 ```
 
 # Structure
