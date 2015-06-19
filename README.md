@@ -18,7 +18,7 @@ boolean result = Minimatch.minimatch("js/test.html", "**/**.js"); // return fals
 ```
 # Build
 
-See cloudbees job: https://opensagres.ci.cloudbees.com/job/minimatch/
+See cloudbees job: https://opensagres.ci.cloudbees.com/job/mismatch/
 
 # Structure
 
