@@ -4,7 +4,6 @@ import static minimatch.internal.StringUtils.matches;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Stack;
 import java.util.regex.Pattern;
@@ -41,7 +40,6 @@ public class Minimatch {
 	private boolean comment;
 	private boolean empty;
 	private boolean negate;
-	private String[] globSet;
 
 	private List<List<ParseItem>> set;
 
@@ -54,7 +52,7 @@ public class Minimatch {
 		this.options = getOptions(options);
 
 		if (this.options.isAllowWindowsPaths()) {
-			pattern = pattern.replace("\\", "/");
+			pattern = StringUtils.replacePath(pattern);
 		}
 
 		// this.regexp = null
@@ -89,7 +87,7 @@ public class Minimatch {
 		this.parseNegate();
 
 		// step 2: expand braces
-		String[] set = this.globSet = this.braceExpand(pattern, options);
+		String[] set = /* this.globSet = */this.braceExpand(pattern, options);
 
 		// if (options.debug) {
 		// this.debug = console.error
@@ -475,10 +473,9 @@ public class Minimatch {
 		// unescape anything in it, though, so that it'll be
 		// an exact match against a file etc.
 		if (!ctx.hasMagic) {
-			return new ParseResult(new LiteralItem(globUnescape(pattern)),
-					false);
+			return new ParseResult(new LiteralItem(
+					StringUtils.globUnescape(pattern)), false);
 		}
-
 		// var flags = options.nocase ? 'i' : ''
 		// var regExp = new RegExp('^' + re + '$', flags)
 
@@ -590,7 +587,7 @@ public class Minimatch {
 
 		// windows: need to use /, not \
 		if (options.isAllowWindowsPaths()) {
-			input = input.replace("\\", "/");
+			input = StringUtils.replacePath(input);
 		}
 
 		// treat the test path as a set of pathparts.
@@ -819,11 +816,4 @@ public class Minimatch {
 		throw new IllegalStateException("wtf?");
 	}
 
-	// replace stuff like \* with *
-	// private static final Pattern globUnescaper = Pattern.compile("\\(.)");
-
-	static String globUnescape(String s) {
-		return s.replaceAll("\\(.)", "$1");
-		// return globUnescaper.replace(s, "$1");
-	}
 }
