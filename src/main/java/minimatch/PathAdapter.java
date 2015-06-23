@@ -8,21 +8,21 @@ package minimatch;
 public interface PathAdapter<T> {
 
 	/**
-	 * Returns the length of the given path.
+	 * Returns the length of the segment of the given path.
 	 * 
-	 * @param paths
-	 * @return the length of the given path.
+	 * @param path
+	 * @return the length of the segment of the given path.
 	 */
-	int getLength(T paths);
+	int getLength(T path);
 
 	/**
 	 * Returns the path name of the given index of the given paths.
 	 * 
-	 * @param paths
+	 * @param path
 	 * @param i
 	 * @return the path name of the given index of the given paths.
 	 */
-	String getPathName(T paths, int i);
+	String getPathName(T path, int i);
 
 	/**
 	 * Create path with the given path name.
