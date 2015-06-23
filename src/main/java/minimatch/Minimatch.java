@@ -32,14 +32,15 @@ import java.util.List;
 import java.util.Stack;
 import java.util.regex.Pattern;
 
-import minimatch.internal.GlobStar;
-import minimatch.internal.LiteralItem;
-import minimatch.internal.MagicItem;
-import minimatch.internal.ParseContext;
-import minimatch.internal.ParseItem;
-import minimatch.internal.ParseResult;
-import minimatch.internal.PatternListItem;
 import minimatch.internal.StringUtils;
+import minimatch.internal.adapters.DefaultPathAdapter;
+import minimatch.internal.parser.GlobStar;
+import minimatch.internal.parser.LiteralItem;
+import minimatch.internal.parser.MagicItem;
+import minimatch.internal.parser.ParseContext;
+import minimatch.internal.parser.ParseItem;
+import minimatch.internal.parser.ParseResult;
+import minimatch.internal.parser.PatternListItem;
 
 /**
  * Port of Node.js' https://github.com/isaacs/minimatch to Java.
@@ -61,13 +62,13 @@ public class Minimatch {
 			.asList("().*{}+?[]^$\\!".toCharArray());
 
 	private static final Pattern hasBraces = Pattern.compile("\\{.*\\}");
-	private static final String slashSplit = "/+";
+	protected static final String slashSplit = "/+";
 
-	private String pattern;
-	private final Options options;
-	private boolean comment;
-	private boolean empty;
-	private boolean negate;
+	protected String pattern;
+	protected final Options options;
+	protected boolean comment;
+	protected boolean empty;
+	protected boolean negate;
 
 	private List<List<ParseItem>> set;
 
@@ -513,7 +514,7 @@ public class Minimatch {
 		return new ParseResult(new MagicItem(ctx.re, options), false);
 	}
 
-	private void debug(String pattern, Object... arguments) {
+	protected void debug(String pattern, Object... arguments) {
 		this.options.getDebugger().debug(pattern, arguments);
 	}
 
@@ -572,54 +573,12 @@ public class Minimatch {
 		return null;
 	}
 
-	public static boolean minimatch(String p, String pattern) {
-		return minimatch(p, pattern, null);
+	public <T> boolean match(T f, PathAdapter<T> adapter) {
+		return match(f, adapter, false);
 	}
 
-	public static boolean minimatch(String p, String pattern, Options options) {
-		options = getOptions(options);
-		if (options == null) {
-			options = Options.DEFAULT;
-		}
-		// shortcut: comments match nothing.
-		if (!options.isNocomment() && pattern.charAt(0) == '#') {
-			return false;
-		}
-		// "" only matches ""
-		if (StringUtils.isEmpty(pattern.trim())) {
-			return "".equals(p);
-		}
-
-		return new Minimatch(pattern, options).match(p);
-	}
-
-	public boolean match(String p) {
-		return match(p, false);
-	}
-
-	public boolean match(String input, boolean partial) {
-		if (options.isDebug()) {
-			this.debug("match", input, this.pattern);
-		}
-		// short-circuit in the case of busted things.
-		// comments, etc.
-		if (this.comment)
-			return false;
-		if (this.empty)
-			return StringUtils.isEmpty(input);
-
-		if ("/".equals(input) && partial)
-			return true;
-
+	public <T> boolean match(T f, PathAdapter<T> adapter, boolean partial) {
 		Options options = this.options;
-
-		// windows: need to use /, not \
-		if (options.isAllowWindowsPaths()) {
-			input = StringUtils.replacePath(input);
-		}
-
-		// treat the test path as a set of pathparts.
-		List<String> f = Arrays.asList(input.split(slashSplit));
 		if (options.isDebug()) {
 			this.debug(this.pattern, "split", f);
 		}
@@ -636,8 +595,8 @@ public class Minimatch {
 		// segment
 		String filename = null;
 		int i;
-		for (i = f.size() - 1; i >= 0; i--) {
-			filename = f.get(i);
+		for (i = adapter.getLength(f) - 1; i >= 0; i--) {
+			filename = adapter.getPathName(f, i);
 			// if (filename) break;
 			if (!StringUtils.isEmpty(filename))
 				break;
@@ -645,12 +604,11 @@ public class Minimatch {
 
 		for (i = 0; i < set.size(); i++) {
 			List<ParseItem> pattern = set.get(i);
-			List<String> file = f;
+			T file = f;
 			if (options.isMatchBase() && pattern.size() == 1) {
-				file = new ArrayList<String>();
-				file.add(filename);
+				file = adapter.createPath(filename);
 			}
-			boolean hit = this.matchOne(file, pattern, partial);
+			boolean hit = this.matchOne(file, adapter, pattern, partial);
 			if (hit) {
 				if (options.isFlipNegate())
 					return true;
@@ -665,7 +623,7 @@ public class Minimatch {
 		return this.negate;
 	}
 
-	private static Options getOptions(Options options) {
+	protected static Options getOptions(Options options) {
 		return options == null ? Options.DEFAULT : options;
 	}
 
@@ -674,23 +632,23 @@ public class Minimatch {
 	// Partial means, if you run out of file before you run
 	// out of pattern, then that's fine, as long as all
 	// the parts match.
-	public boolean matchOne(List<String> file, List<ParseItem> pattern,
-			boolean partial) {
+	private <T> boolean matchOne(T file, PathAdapter<T> adapter,
+			List<ParseItem> pattern, boolean partial) {
 		Options options = this.options;
 
 		if (options.isDebug()) {
 			// //this.debug('matchOne',
 			// // { 'this': this, file: file, pattern: pattern })
-			this.debug("matchOne", file.size(), pattern.size());
+			this.debug("matchOne", adapter.getLength(file), pattern.size());
 		}
 
-		int fi = 0, pi = 0, fl = file.size(), pl = pattern.size();
+		int fi = 0, pi = 0, fl = adapter.getLength(file), pl = pattern.size();
 		for (; (fi < fl) && (pi < pl); fi++, pi++) {
 			if (options.isDebug()) {
 				this.debug("matchOne loop");
 			}
 			ParseItem p = pattern.get(pi);
-			String f = file.get(fi);
+			String f = adapter.getPathName(file, fi);
 
 			// this.debug(pattern, p, f);
 
@@ -739,7 +697,7 @@ public class Minimatch {
 					// . and .. are *never* matched by **, for explosively
 					// exponential reasons.
 					for (; fi < fl; fi++) {
-						String fileitem = file.get(fi);
+						String fileitem = adapter.getPathName(file, fi);
 						if (fileitem.equals(".")
 								|| fileitem.equals("..")
 								|| (!options.isDot() && fileitem.charAt(0) == '.'))
@@ -750,14 +708,14 @@ public class Minimatch {
 
 				// ok, let's see if we can swallow whatever we can.
 				while (fr < fl) {
-					String swallowee = file.get(fr);
+					String swallowee = adapter.getPathName(file, fr);
 
 					if (options.isDebug()) {
 						this.debug("\nglobstar while", file, fr, pattern, pr,
 								swallowee);
 					}
 					// XXX remove this slice. Just pass the start index.
-					if (this.matchOne(file.subList(fr, file.size()),
+					if (this.matchOne(adapter.subPath(file, fr), adapter,
 							pattern.subList(pr, pattern.size()), partial)) {
 						if (options.isDebug()) {
 							this.debug("globstar found match!", fr, fl,
@@ -836,12 +794,64 @@ public class Minimatch {
 			// this is only acceptable if we're on the very last
 			// empty segment of a file with a trailing slash.
 			// a/* should match a/b/
-			boolean emptyFileEnd = (fi == fl - 1) && (file.get(fi).equals(""));
+			boolean emptyFileEnd = (fi == fl - 1)
+					&& (adapter.getPathName(file, fi).equals(""));
 			return emptyFileEnd;
 		}
 
 		// should be unreachable.
 		throw new IllegalStateException("wtf?");
+	}
+
+	public static boolean minimatch(String p, String pattern) {
+		return minimatch(p, pattern, null);
+	}
+
+	public static boolean minimatch(String p, String pattern, Options options) {
+		options = getOptions(options);
+		if (options == null) {
+			options = Options.DEFAULT;
+		}
+		// shortcut: comments match nothing.
+		if (!options.isNocomment() && pattern.charAt(0) == '#') {
+			return false;
+		}
+		// "" only matches ""
+		if (StringUtils.isEmpty(pattern.trim())) {
+			return "".equals(p);
+		}
+
+		return new Minimatch(pattern, options).match(p);
+	}
+
+	public boolean match(String p) {
+		return match(p, false);
+	}
+
+	public boolean match(String input, boolean partial) {
+		if (options.isDebug()) {
+			this.debug("match", input, this.pattern);
+		}
+		// short-circuit in the case of busted things.
+		// comments, etc.
+		if (this.comment)
+			return false;
+		if (this.empty)
+			return StringUtils.isEmpty(input);
+
+		if ("/".equals(input) && partial)
+			return true;
+
+		Options options = this.options;
+
+		// windows: need to use /, not \
+		if (options.isAllowWindowsPaths()) {
+			input = StringUtils.replacePath(input);
+		}
+
+		// treat the test path as a set of pathparts.
+		List<String> f = Arrays.asList(input.split(slashSplit));
+		return match(f, DefaultPathAdapter.INSTANCE, partial);
 	}
 
 }

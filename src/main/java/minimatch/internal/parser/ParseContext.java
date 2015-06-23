@@ -22,23 +22,12 @@
  * OF CONTRACT, TORT OR OTHERWISE,  ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-package minimatch.internal;
+package minimatch.internal.parser;
 
-public class ParseResult {
+public class ParseContext {
 
-	private final ParseItem item;
-	private final boolean b;
-
-	public ParseResult(ParseItem item, boolean b) {
-		this.item = item;
-		this.b = b;
-	}
-
-	public ParseItem getItem() {
-		return item;
-	}
-
-	public boolean isB() {
-		return b;
-	}
+	// State char
+	public Character stateChar;
+	public String re = "";
+	public boolean hasMagic;
 }

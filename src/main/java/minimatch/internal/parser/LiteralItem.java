@@ -22,12 +22,19 @@
  * OF CONTRACT, TORT OR OTHERWISE,  ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-package minimatch.internal;
+package minimatch.internal.parser;
 
-public class ParseContext {
+import minimatch.Options;
 
-	// State char
-	public Character stateChar;
-	public String re = "";
-	public boolean hasMagic;
+
+public class LiteralItem extends ParseItem {
+	public LiteralItem(String source) {
+		super(source);
+	}
+
+	@Override
+	public boolean match(String input, Options options) {
+		return options.isNocase() ? input.equalsIgnoreCase(getSource()) : input
+				.equals(getSource());
+	}
 }

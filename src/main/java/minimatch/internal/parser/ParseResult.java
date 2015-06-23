@@ -22,26 +22,23 @@
  * OF CONTRACT, TORT OR OTHERWISE,  ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-package minimatch.internal;
+package minimatch.internal.parser;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+public class ParseResult {
 
-import minimatch.Options;
+	private final ParseItem item;
+	private final boolean b;
 
-public class MagicItem extends ParseItem {
-
-	private final Pattern pattern;
-
-	public MagicItem(String source, Options options) {
-		super(source);
-		this.pattern = Pattern.compile(source);
+	public ParseResult(ParseItem item, boolean b) {
+		this.item = item;
+		this.b = b;
 	}
 
-	@Override
-	public boolean match(String input, Options options) {
-		Matcher m = pattern.matcher(input);
-		return m.matches();
+	public ParseItem getItem() {
+		return item;
 	}
 
+	public boolean isB() {
+		return b;
+	}
 }

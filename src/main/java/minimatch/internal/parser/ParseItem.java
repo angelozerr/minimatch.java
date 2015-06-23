@@ -22,19 +22,24 @@
  * OF CONTRACT, TORT OR OTHERWISE,  ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-package minimatch.internal;
+package minimatch.internal.parser;
 
 import minimatch.Options;
 
-public class GlobStar extends ParseItem {
+public abstract class ParseItem {
 
-	public GlobStar() {
-		super(null);
+	public static final ParseItem Empty = new LiteralItem("");
+
+	private final String source;
+
+	public ParseItem(String source) {
+		this.source = source;
 	}
 
-	@Override
-	public boolean match(String f, Options options) {
-		throw new UnsupportedOperationException();
+	public String getSource() {
+		return source;
 	}
+
+	public abstract boolean match(String f, Options options);
 
 }
