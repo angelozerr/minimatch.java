@@ -37,4 +37,8 @@ public class GlobStar extends ParseItem {
 		throw new UnsupportedOperationException();
 	}
 
+	@Override
+	public String toString() {
+		return "GlobStar";
+	}
 }

@@ -28,6 +28,7 @@ import minimatch.Options;
 
 
 public class LiteralItem extends ParseItem {
+	
 	public LiteralItem(String source) {
 		super(source);
 	}
@@ -36,5 +37,11 @@ public class LiteralItem extends ParseItem {
 	public boolean match(String input, Options options) {
 		return options.isNocase() ? input.equalsIgnoreCase(getSource()) : input
 				.equals(getSource());
+	}
+	
+	@Override
+	public String toString() {
+		// TODO Auto-generated method stub
+		return "Literal(\"" + getSource() + "\")";
 	}
 }

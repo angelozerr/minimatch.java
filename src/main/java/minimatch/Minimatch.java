@@ -139,8 +139,7 @@ public class Minimatch {
 
 		// glob --> regexps
 		List<List<ParseItem>> results = globToRegExps(globParts);
-		System.err.println(results);
-
+		
 		// filter out everything that didn't compile properly.
 		/*
 		 * set = set.filter(function (s) { return s.indexOf(false) === -1 })
@@ -293,7 +292,7 @@ public class Minimatch {
 					continue;
 				}
 
-				if (ctx.stateChar != null) {
+				if (ctx.stateChar == null) {
 					ctx.re += "\\(";
 					continue;
 				}
@@ -487,12 +486,12 @@ public class Minimatch {
 		// if the re is not "" at this point, then we need to make sure
 		// it doesn't match against an empty path part.
 		// Otherwise a/* will match a/, which it should not.
-		if (ctx.re != "" && ctx.hasMagic)
+		if (!StringUtils.isEmpty(ctx.re) && ctx.hasMagic)
 			ctx.re = "(?=.)" + ctx.re;
 
-		if (addPatternStart)
+		if (addPatternStart) {
 			ctx.re = patternStart + ctx.re;
-
+		}
 		// parsing just a piece of a larger pattern.
 		if (isSub) {
 			return new ParseResult(new LiteralItem(ctx.re), ctx.hasMagic);

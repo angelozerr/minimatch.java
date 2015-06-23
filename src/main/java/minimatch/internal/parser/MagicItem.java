@@ -44,4 +44,8 @@ public class MagicItem extends ParseItem {
 		return m.matches();
 	}
 
+	@Override
+	public String toString() {
+		return "RegExp(\"" + getSource() + "\")";
+	}
 }
