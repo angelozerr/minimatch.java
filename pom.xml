@@ -5,8 +5,8 @@
 	<artifactId>minimatch.java</artifactId>
 	<version>1.0.0-SNAPSHOT</version>
 	<scm>
-		<connection>https://github.com/angelozerr/minimatch.java.git</connection>
-		<developerConnection>https://github.com/angelozerr/minimatch.java.git</developerConnection>
+		<connection>scm:git:https://github.com/angelozerr/minimatch.java.git</connection>
+		<developerConnection>scm:git:https://github.com/angelozerr/minimatch.java.git</developerConnection>
 		<url>https://github.com/angelozerr/minimatch.java</url>
 	</scm>
 	<build>
