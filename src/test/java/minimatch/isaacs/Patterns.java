@@ -34,9 +34,8 @@ import java.util.Set;
 import minimatch.AbstractMinimatchTest;
 import minimatch.Minimatch;
 import minimatch.Options;
+import minimatch.SysErrDebugger;
 import minimatch.TestCase;
-import minimatch.AbstractMinimatchTest.AbstractTestCase;
-import minimatch.AbstractMinimatchTest.ITestCase;
 
 import org.junit.Assert;
 import org.junit.runner.RunWith;
@@ -153,7 +152,9 @@ public class Patterns extends AbstractMinimatchTest {
 				// [ pattern, [matches], MM opts, files, TAP opts]
 				/* onestar/twostar */
 				{new Test("{/*,*}", lst(), lst("/asdf/asdf/asdf"))},
+				/* XXX - implement braces expansion
 				{new Test("{/?,*}", lst("/a", "bb"), lst("/a", "/b/b", "/a/b/c", "bb"))},
+				*/
 
 				// dots should not match unless requested",
 				{new Test("**", lst("a/b"), lst("a/b", "a/.d", ".a/.d"))},
@@ -200,19 +201,20 @@ public class Patterns extends AbstractMinimatchTest {
 						lst("+(a|b\\|c\\\\|d\\\\|e\\\\\\\\|f\\\\\\\\|g", "a", "b\\c"))},
 
 				// crazy nested {,,} and *(||) tests.
+				/* XXX - implement brace expansion
 				{new SetFiles(
 						"a", "b", "c", "d", "ab", "ac", "ad", "bc", "cb", "bc,d",
 						"c,db", "c,d", "d)", "(b|c", "*(b|c", "b|c", "b|cc", "cb|c",
 						"x(a|b|c)", "x(a|c)", "(a|b|c)", "(a|c)")},
 				{new Test("*(a|{b,c})", lst("a", "b", "c", "ab", "ac"))},
 				{new Test("{a,*(b|c,d)}", lst("a", "(b|c", "*(b|c", "d)"))},
-				
 				// a
 				// *(b|c)
 				// *(b|d)
 				{new Test("{a,*(b|{c,d})}", lst("a", "b", "bc", "cb", "c", "d"))},
 				{new Test("*(a|{b|c,c})", lst("a", "b", "c", "ab", "ac", "bc", "cb"))},
-
+				*/
+						
 				// test various flag settings.
 				{new Test("*(a|{b|c,c})", lst("x(a|b|c)", "x(a|c)", "(a|b|c)", "(a|c)"), new Options().setNoext(true))},
 				{new Test("a?b", lst("x/y/acb", "acb/"), lst("x/y/acb", "acb/", "acb/d/e", "x/y/acb/d"), new Options().setMatchBase(true))},
@@ -295,7 +297,10 @@ public class Patterns extends AbstractMinimatchTest {
 		public Test(String pattern, List<String> expectedOutput, List<String> files, Options options) {
 			this.pattern = pattern;
 			this.expectedOutput = new HashSet<String>(expectedOutput);
-			this.options = options;
+			if (options == null) {
+				options = new Options();
+			}
+			this.options = options.setDebugger(SysErrDebugger.INSTANCE);
 			this.files = files;
 			this.id = nextId++;
 			testCase = new TestCase(toString());
