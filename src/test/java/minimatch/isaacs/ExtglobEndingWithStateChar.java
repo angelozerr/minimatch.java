@@ -21,7 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package minimatch;
+package minimatch.isaacs;
+
+import minimatch.Minimatch;
 
 import org.junit.Assert;
 import org.junit.Test;

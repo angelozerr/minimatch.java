@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package minimatch;
+package minimatch.java;
 
 import minimatch.Minimatch;
 import minimatch.Options;
