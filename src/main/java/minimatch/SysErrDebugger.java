@@ -23,7 +23,7 @@
  */
 package minimatch;
 
-import java.text.MessageFormat;
+import java.util.Formatter;
 
 public class SysErrDebugger implements Debugger {
 
@@ -35,7 +35,15 @@ public class SysErrDebugger implements Debugger {
 	
 	@Override
 	public void debug(String pattern, Object... arguments) {
-		String message = MessageFormat.format(pattern, arguments);
-		System.err.println(message);
+		StringBuilder sb = new StringBuilder();
+		Formatter f = new Formatter(sb);
+		try {
+			f.format(pattern, arguments);
+			System.err.println(sb.toString());
+		} catch (Throwable t) {
+			t.printStackTrace();
+		} finally {
+			f.close();
+		}
 	}
 }

@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Stack;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import minimatch.internal.StringUtils;
@@ -51,17 +52,25 @@ public class Minimatch {
 
 	// any single thing other than /
 	// don't need to escape / when using new RegExp()
-	private final String qmark = "[^/]"
+	private final String QMARK = "[^/]";
 
 	// * => any number of characters
-			,
-			star = qmark + "*?";
+	private final String STAR = QMARK + "*?";
 
+	// ** when dots are allowed.  Anything goes, except .. and .
+	// not (^ or / followed by one or two dots followed by $ or /),
+	// followed by anything, any number of times.
+	private final String TWO_STAR_DOT = "(?:(?!(?:\\/|^)(?:\\.{1,2})($|\\/)).)*?";
+
+	// not a ^ or / followed by a dot,
+	// followed by anything, any number of times.
+	private final String TWO_STAR_NO_DOT = "(?:(?!(?:\\/|^)\\.).)*?'";
+	
 	private final List<Character> reSpecials = StringUtils
 			.asList("().*{}+?[]^$\\!".toCharArray());
 
 	private static final Pattern hasBraces = Pattern.compile("\\{.*\\}");
-	protected static final String slashSplit = "/+";
+	protected static final Pattern slashSplit = Pattern.compile("/+");
 
 	protected String pattern;
 	protected final Options options;
@@ -101,7 +110,7 @@ public class Minimatch {
 		Options options = this.options;
 
 		// empty patterns and comments match nothing.
-		if (!options.isNocomment() && pattern.charAt(0) == '#') {
+		if (!options.isNocomment() && !pattern.isEmpty() && pattern.charAt(0) == '#') {
 			this.comment = true;
 			return;
 		}
@@ -132,9 +141,7 @@ public class Minimatch {
 		// return s.split(slashSplit)
 		// })
 		String[][] globParts = globParts(set);
-		if (options.isDebug()) {
-			this.debug(this.pattern, set);
-		}
+		this.debug(this.pattern, (Object[])set);
 
 		// glob --> regexps
 		List<List<ParseItem>> results = globToRegExps(globParts);
@@ -143,9 +150,7 @@ public class Minimatch {
 		/*
 		 * set = set.filter(function (s) { return s.indexOf(false) === -1 })
 		 */
-		if (options.isDebug()) {
-			this.debug(this.pattern, set);
-		}
+		this.debug(this.pattern, (Object[])set);
 		this.set = results;
 
 	}
@@ -153,7 +158,7 @@ public class Minimatch {
 	private String[][] globParts(String[] set) {
 		String[][] parts = new String[set.length][];
 		for (int i = 0; i < set.length; i++) {
-			parts[i] = set[i].split(slashSplit);
+			parts[i] = slashSplit.split(set[i]);
 		}
 		return parts;
 	}
@@ -208,6 +213,7 @@ public class Minimatch {
 		boolean escaping = false;
 		// ? => one single character
 		Stack<PatternListItem> patternListStack = new Stack<PatternListItem>();
+		Stack<PatternListItem> negativeListStack = new Stack<PatternListItem>();
 		char plType;
 
 		boolean inClass = false;
@@ -222,12 +228,11 @@ public class Minimatch {
 
 		for (int i = 0; i < pattern.length(); i++) {
 			char c = pattern.charAt(i);
-			if (options.isDebug()) {
-				this.debug("%s\t%s %s %j", pattern, i, ctx.re, c);
-			}
+			this.debug("%s\t%s %s \"%c\"", pattern, i, ctx.re, c);
+			
 			// skip over any that are escaped.
 			if (escaping && reSpecials.contains(c)) {
-				ctx.re += '\\' + c;
+				ctx.re += "\\" + c;
 				escaping = false;
 				continue;
 			}
@@ -243,24 +248,21 @@ public class Minimatch {
 				clearStateChar(ctx);
 				escaping = true;
 				continue;
-				// the various stateChar values
-				// for the "extglob" stuff.
+				
+			// the various stateChar values
+			// for the "extglob" stuff.
 			case '?':
 			case '*':
 			case '+':
 			case '@':
 			case '!':
-				if (options.isDebug()) {
-					this.debug("%s\t%s %s %j <-- stateChar", pattern, i,
-							ctx.re, c);
-				}
+				this.debug("%s\t%s %s \"%c\" <-- stateChar", pattern, i,
+						ctx.re, c);
 
 				// all of those are literals inside a class, except that
 				// the glob [!a] means [^a] in regexp
 				if (inClass) {
-					if (options.isDebug()) {
-						this.debug("  in class");
-					}
+					this.debug("  in class");
 					if (c == '!' && i == classStart + 1) {
 						c = '^';
 					}
@@ -271,9 +273,7 @@ public class Minimatch {
 				// if we already have a stateChar, then it means
 				// that there was something like ** or +? in there.
 				// Handle the stateChar, then proceed with this one.
-				if (options.isDebug()) {
-					this.debug("call clearStateChar %j", ctx.stateChar);
-				}
+				this.debug("call clearStateChar \"%c\"", ctx.stateChar);
 				clearStateChar(ctx);
 				ctx.stateChar = c;
 				// if extglob is disabled, then +(asdf|foo) isn't a thing.
@@ -301,10 +301,8 @@ public class Minimatch {
 						.length()));
 
 				// negation is (?:(?!js)[^/]*)
-				ctx.re += ctx.stateChar == '!' ? "(?:(?!" : "(?:";
-				if (options.isDebug()) {
-					this.debug("plType %j %j", ctx.stateChar, ctx.re);
-				}
+				ctx.re += ctx.stateChar == '!' ? "(?:(?!(?:" : "(?:";
+				this.debug("plType \"%c\" \"%s\"", ctx.stateChar, ctx.re);
 				ctx.stateChar = null; // false;
 				continue;
 
@@ -317,12 +315,15 @@ public class Minimatch {
 				clearStateChar(ctx);
 				ctx.hasMagic = true;
 				ctx.re += ")";
-				plType = patternListStack.pop().type;
+				PatternListItem pl = patternListStack.pop();
+				plType = pl.type;
 				// negation is (?:(?!js)[^/]*)
 				// The others are (?:<pattern>)<type>
 				switch (plType) {
 				case '!':
-					ctx.re += "[^/]*?)";
+					negativeListStack.push(pl);
+					ctx.re += ")[^/]*?)";
+					pl.reEnd = ctx.re.length();
 					break;
 				case '?':
 				case '+':
@@ -345,7 +346,7 @@ public class Minimatch {
 				ctx.re += '|';
 				continue;
 
-				// these are mostly the same in regexp and glob
+			// these are mostly the same in regexp and glob
 			case '[':
 				// swallow any state-tracking char before the [
 				clearStateChar(ctx);
@@ -384,7 +385,6 @@ public class Minimatch {
 					// to do safely. For now, this is safe and works.
 					String cs = pattern.substring(classStart + 1, i);
 					try {
-						// RegExp('[' + cs + ']');
 						Pattern.compile("[" + cs + "]");
 					} catch (Throwable e) {
 						// not a valid class!
@@ -440,29 +440,41 @@ public class Minimatch {
 		// | chars that were already escaped.
 		while (!patternListStack.isEmpty()) {
 			PatternListItem pl = patternListStack.pop();
-			String tail = ""; // re.slice(pl.reStart + 3);
+			String tail = ctx.re.substring(pl.reStart + 3);
 			// maybe some even number of \, then maybe 1 \, followed by a |
-			/*
-			 * tail = tail.replace(/((?:\\{2})*)(\\?)\|/g, function (_, $1, $2)
-			 * { if (!$2) { // the | isn't already escaped, so escape it. $2 =
-			 * '\\'; }
-			 * 
-			 * // need to escape all those slashes *again*, without escaping the
-			 * // one that we need for escaping the | character. As it works
-			 * out, // escaping an even number of slashes can be done by simply
-			 * repeating // it exactly after itself. That's why this trick
-			 * works. // // I am sorry that you have to see this. return $1 + $1
-			 * + $2 + '|'; })
-			 */
-
-			if (options.isDebug()) {
-				this.debug("tail=%j\n   %s", tail, tail);
+			Pattern p = Pattern.compile("((?:\\\\{2})*)(\\\\?)\\|");
+			
+			//Java 1.6 lacks functional programming stuff, so replace manually 
+			Matcher m = p.matcher(tail);
+			StringBuilder sb = new StringBuilder();
+			int lastEnd = 0;
+			while (m.find()) {
+				String g1 = m.group(1);
+				String g2 = m.group(2);
+				if (g2 == null || g2.isEmpty()) {
+			        // the | isn't already escaped, so escape it.
+					g2 = "\\";
+				}
+		        // need to escape all those slashes *again*, without escaping the
+		        // one that we need for escaping the | character.  As it works out,
+		        // escaping an even number of slashes can be done by simply repeating
+		        // it exactly after itself.  That's why this trick works.
+		        //
+		        // I am sorry that you have to see this.
+				sb.append(tail.substring(lastEnd, m.start()));
+				sb.append(g1 + g1 + g2 + "|");
+				lastEnd = m.end();
 			}
-			String t = "*".equals(pl.type) ? star : "?".equals(pl.type) ? qmark
+			sb.append(tail.substring(lastEnd));
+
+			tail = sb.toString();
+			
+			this.debug("tail=%s\n   %s", tail, tail);
+			String t = "*".equals(pl.type) ? STAR : "?".equals(pl.type) ? QMARK
 					: "\\" + pl.type;
 
 			ctx.hasMagic = true;
-			// ctx.re = ctx.re.slice(0, pl.reStart) + t + "\\(" + tail;
+			ctx.re = ctx.re.substring(0, pl.reStart) + t + "\\(" + tail;
 		}
 
 		// handle trailing things that only matter at the very end.
@@ -480,6 +492,39 @@ public class Minimatch {
 		case '[':
 		case '(':
 			addPatternStart = true;
+		}
+		
+		// Hack to work around lack of negative lookbehind in JS
+		// A pattern like: *.!(x).!(y|z) needs to ensure that a name
+		// like 'a.xyz.yz' doesn't match.  So, the first negative
+		// lookahead, has to look ALL the way ahead, to the end of
+		// the pattern.
+		while(!negativeListStack.isEmpty()) {
+			PatternListItem nl = negativeListStack.pop();
+
+		    String nlBefore = ctx.re.substring(0, nl.reStart);
+		    String nlFirst = ctx.re.substring(nl.reStart, nl.reEnd - 8);
+		    String nlLast = ctx.re.substring(nl.reEnd - 8, nl.reEnd);
+		    String nlAfter = ctx.re.substring(nl.reEnd);
+
+		    nlLast += nlAfter;
+
+		    // Handle nested stuff like *(*.js|!(*.json)), where open parens
+		    // mean that we should *not* include the ) in the bit that is considered
+		    // "after" the negated section.
+		    int openParensBefore = nlBefore.split("\\(").length - 1;
+		    String cleanAfter = nlAfter;
+		    for (int i = 0; i < openParensBefore; i++) {
+		    	cleanAfter = cleanAfter.replaceAll("\\)[+*?]?", "");
+		    }
+		    nlAfter = cleanAfter;
+
+		    String dollar = "";
+		    if (nlAfter.isEmpty() && !isSub) {
+		    	dollar = "$";
+		    }
+		    String newRe = nlBefore + nlFirst + nlAfter + dollar + nlLast;
+		    ctx.re = newRe;
 		}
 
 		// if the re is not "" at this point, then we need to make sure
@@ -503,17 +548,14 @@ public class Minimatch {
 			return new ParseResult(new LiteralItem(
 					StringUtils.globUnescape(pattern)), false);
 		}
-		// var flags = options.nocase ? 'i' : ''
-		// var regExp = new RegExp('^' + re + '$', flags)
-
-		// regExp._glob = pattern
-		// regExp._src = re
 
 		return new ParseResult(new MagicItem(ctx.re, options), false);
 	}
 
 	protected void debug(String pattern, Object... arguments) {
-		this.options.getDebugger().debug(pattern, arguments);
+		if (this.options.isDebug()) {
+			this.options.getDebugger().debug(pattern, arguments);
+		}
 	}
 
 	private void clearStateChar(ParseContext ctx) {
@@ -522,17 +564,18 @@ public class Minimatch {
 			// that wasn't consumed by this pass.
 			switch (ctx.stateChar) {
 			case '*':
-				ctx.re += star;
+				ctx.re += STAR;
 				ctx.hasMagic = true;
 				break;
 			case '?':
-				ctx.re += qmark;
+				ctx.re += QMARK;
 				ctx.hasMagic = true;
 				break;
 			default:
 				ctx.re += "\\" + ctx.stateChar;
 				break;
 			}
+			debug("clearStateChar \"%c\" \"%s\"", ctx.stateChar, ctx.re);
 			ctx.stateChar = null;
 		}
 	}
@@ -567,7 +610,8 @@ public class Minimatch {
 	}
 
 	private String[] expand(String pattern) {
-		return null;//BraceExpansion.expand(pattern);
+		//XXX - implement brace expansion
+		return new String[] {pattern};
 	}
 
 	public <T> boolean match(T f, PathAdapter<T> adapter) {
@@ -576,18 +620,17 @@ public class Minimatch {
 
 	public <T> boolean match(T f, PathAdapter<T> adapter, boolean partial) {
 		Options options = this.options;
-		if (options.isDebug()) {
-			this.debug(this.pattern, "split", f);
-		}
+		
+		this.debug(this.pattern, "split", f);
+		
 		// just ONE of the pattern sets in this.set needs to match
 		// in order for it to be valid. If negating, then just one
 		// match means that we have failed.
 		// Either way, return on the first hit.
 
 		List<List<ParseItem>> set = this.set;
-		if (options.isDebug()) {
-			this.debug(this.pattern, "set", set);
-		}
+		this.debug(this.pattern, "set", set);
+		
 		// Find the basename of the path by looking for the last non-empty
 		// segment
 		String filename = null;
@@ -633,17 +676,13 @@ public class Minimatch {
 			List<ParseItem> pattern, boolean partial) {
 		Options options = this.options;
 
-		if (options.isDebug()) {
-			// //this.debug('matchOne',
-			// // { 'this': this, file: file, pattern: pattern })
-			this.debug("matchOne", adapter.getLength(file), pattern.size());
-		}
+		// //this.debug('matchOne',
+		// // { 'this': this, file: file, pattern: pattern })
+		this.debug("matchOne", adapter.getLength(file), pattern.size());
 
 		int fi = 0, pi = 0, fl = adapter.getLength(file), pl = pattern.size();
 		for (; (fi < fl) && (pi < pl); fi++, pi++) {
-			if (options.isDebug()) {
-				this.debug("matchOne loop");
-			}
+			this.debug("matchOne loop");
 			ParseItem p = pattern.get(pi);
 			String f = adapter.getPathName(file, fi);
 
@@ -656,9 +695,7 @@ public class Minimatch {
 			}
 
 			if (p instanceof GlobStar) {
-				if (options.isDebug()) {
-					this.debug("GLOBSTAR", pattern, p, f);
-				}
+				this.debug("GLOBSTAR", pattern, p, f);
 				// "**"
 				// a/**/b/**/c would match the following:
 				// a/b/x/y/z/c
@@ -684,9 +721,7 @@ public class Minimatch {
 				int fr = fi;
 				int pr = pi + 1;
 				if (pr == pl) {
-					if (options.isDebug()) {
-						this.debug("** at the end");
-					}
+					this.debug("** at the end");
 					// a ** at the end will just swallow the rest.
 					// We have found a match.
 					// however, it will not swallow /.x, unless
@@ -707,17 +742,13 @@ public class Minimatch {
 				while (fr < fl) {
 					String swallowee = adapter.getPathName(file, fr);
 
-					if (options.isDebug()) {
-						this.debug("\nglobstar while", file, fr, pattern, pr,
-								swallowee);
-					}
+					this.debug("\nglobstar while", file, fr, pattern, pr,
+							swallowee);
 					// XXX remove this slice. Just pass the start index.
 					if (this.matchOne(adapter.subPath(file, fr), adapter,
 							pattern.subList(pr, pattern.size()), partial)) {
-						if (options.isDebug()) {
-							this.debug("globstar found match!", fr, fl,
-									swallowee);
-						}
+						this.debug("globstar found match!", fr, fl,
+								swallowee);
 						// found a match.
 						return true;
 					} else {
@@ -726,17 +757,13 @@ public class Minimatch {
 						if (swallowee.equals(".")
 								|| swallowee.equals("..")
 								|| (!options.isDot() && swallowee.charAt(0) == '.')) {
-							if (options.isDebug()) {
-								this.debug("dot detected!", file, fr, pattern,
-										pr);
-							}
+							this.debug("dot detected!", file, fr, pattern,
+									pr);
 							break;
 						}
 
 						// ** swallows a segment, and continue.
-						if (options.isDebug()) {
-							this.debug("globstar swallow a segment, and continue");
-						}
+						this.debug("globstar swallow a segment, and continue");
 						fr++;
 					}
 				}
@@ -747,10 +774,8 @@ public class Minimatch {
 				// If there's more *pattern* left, then
 				if (partial) {
 					// ran out of file
-					if (options.isDebug()) {
-						this.debug("\n>>> no match, partial?", file, fr,
-								pattern, pr);
-					}
+					this.debug("\n>>> no match, partial?", file, fr,
+							pattern, pr);
 					if (fr == fl)
 						return true;
 				}
@@ -826,9 +851,8 @@ public class Minimatch {
 	}
 
 	public boolean match(String input, boolean partial) {
-		if (options.isDebug()) {
-			this.debug("match", input, this.pattern);
-		}
+		this.debug("match %s %s", input, this.pattern);
+		
 		// short-circuit in the case of busted things.
 		// comments, etc.
 		if (this.comment)
@@ -847,7 +871,7 @@ public class Minimatch {
 		}
 
 		// treat the test path as a set of pathparts.
-		List<String> f = Arrays.asList(input.split(slashSplit));
+		List<String> f = Arrays.asList(slashSplit.split(input));
 		return match(f, DefaultPathAdapter.INSTANCE, partial);
 	}
 

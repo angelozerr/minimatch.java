@@ -34,7 +34,8 @@ public class MagicItem extends ParseItem {
 
 	public MagicItem(String source, Options options) {
 		super(source);
-		this.pattern = Pattern.compile(source);
+		this.pattern = Pattern.compile("^" + source + "$",
+				options.isNocase() ? Pattern.CASE_INSENSITIVE : 0);
 	}
 
 	@Override
