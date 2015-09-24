@@ -23,24 +23,25 @@
  */
 package minimatch;
 
+import org.junit.runner.RunWith;
+import org.junit.runners.Suite;
+
 import minimatch.isaacs.ExtglobEndingWithStateChar;
+import minimatch.isaacs.TrickyNegations;
 import minimatch.java.FootTest;
 import minimatch.java.PatternWichStartsWithExcludeTest;
 import minimatch.java.PatternWichStartsWithSlashTest;
-import minimatch.java.TrickyNegationWithBarMinJs;
-
-import org.junit.runner.RunWith;
-import org.junit.runners.Suite;
+import minimatch.java.TrickyNegationsToFix;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
 //	Patterns.class,
-//	TrickyNegations.class,
+	TrickyNegations.class,
 	FootTest.class,
 	ExtglobEndingWithStateChar.class,
 	PatternWichStartsWithExcludeTest.class,
 	PatternWichStartsWithSlashTest.class,
-	TrickyNegationWithBarMinJs.class,
+	TrickyNegationsToFix.class,
 })
 
 public class AllMinimatchTests {

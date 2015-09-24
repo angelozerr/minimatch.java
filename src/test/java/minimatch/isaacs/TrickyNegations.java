@@ -28,15 +28,14 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-import minimatch.AbstractMinimatchTest;
-import minimatch.Minimatch;
-import minimatch.TestCase;
-import minimatch.AbstractMinimatchTest.AbstractTestCase;
-import minimatch.AbstractMinimatchTest.ITestCase;
-
 import org.junit.Assert;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+
+import minimatch.AbstractMinimatchTest;
+import minimatch.Minimatch;
+import minimatch.Options;
+import minimatch.TestCase;
 
 /**
  * Translation of https://github.com/isaacs/minimatch/blob/master/test/tricky-negations.js
@@ -48,6 +47,8 @@ import org.junit.runners.Parameterized;
 public class TrickyNegations extends AbstractMinimatchTest {
 
 
+	private static final Options options = new Options().setNonegate(true);
+	
 	private static final List<Object[]> TESTS = new ArrayList<Object[]>();
 	
 	static {
@@ -183,7 +184,7 @@ public class TrickyNegations extends AbstractMinimatchTest {
 		@Override
 		public void internalRun() {
 			Assert.assertEquals("Pattern matching failed", c.shouldPass, 
-					new Minimatch(c.pattern).match(file));
+					Minimatch.minimatch(file, c.pattern, options));
 		}
 		
 		@Override
