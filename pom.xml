@@ -76,7 +76,7 @@
 		        <version>2.12.4</version>
 		        <configuration>
 		          <includes>
-		            <include>AllMinimatchTest.java</include>
+		            <include>**/AllMinimatchTests.java</include>
 		          </includes>
 		        </configuration>
 		    </plugin>
