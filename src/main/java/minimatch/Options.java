@@ -44,64 +44,72 @@ public class Options {
 		return allowWindowsPaths;
 	}
 
-	public void setAllowWindowsPaths(boolean allowWindowsPaths) {
+	public Options setAllowWindowsPaths(boolean allowWindowsPaths) {
 		this.allowWindowsPaths = allowWindowsPaths;
+		return this;
 	}
 
 	public boolean isNocomment() {
 		return nocomment;
 	}
 
-	public void setNocomment(boolean nocomment) {
+	public Options setNocomment(boolean nocomment) {
 		this.nocomment = nocomment;
+		return this;
 	}
 
 	public boolean isNonegate() {
 		return nonegate;
 	}
 
-	public void setNonegate(boolean nonegate) {
+	public Options setNonegate(boolean nonegate) {
 		this.nonegate = nonegate;
+		return this;
 	}
 
 	public boolean isNobrace() {
 		return nobrace;
 	}
 
-	public void setNobrace(boolean nobrace) {
+	public Options setNobrace(boolean nobrace) {
 		this.nobrace = nobrace;
+		return this;
 	}
 
 	public boolean isNoglobstar() {
 		return noglobstar;
 	}
 
-	public void setNoglobstar(boolean noglobstar) {
+	public Options setNoglobstar(boolean noglobstar) {
 		this.noglobstar = noglobstar;
+		return this;
 	}
 
 	public boolean isNocase() {
 		return nocase;
 	}
 
-	public void setNocase(boolean nocase) {
+	public Options setNocase(boolean nocase) {
 		this.nocase = nocase;
+		return this;
 	}
 
 	public boolean isDot() {
 		return dot;
 	}
 
-	public void setDot(boolean dot) {
+	public Options setDot(boolean dot) {
 		this.dot = dot;
+		return this;
 	}
 
 	public boolean isNoext() {
 		return noext;
 	}
 
-	public void setNoext(boolean noext) {
+	public Options setNoext(boolean noext) {
 		this.noext = noext;
+		return this;
 	}
 
 	public boolean isDebug() {
@@ -112,24 +120,58 @@ public class Options {
 		return matchBase;
 	}
 
-	public void setMatchBase(boolean matchBase) {
+	public Options setMatchBase(boolean matchBase) {
 		this.matchBase = matchBase;
+		return this;
 	}
 
 	public boolean isFlipNegate() {
 		return flipNegate;
 	}
 
-	public void setFlipNegate(boolean flipNegate) {
+	public Options setFlipNegate(boolean flipNegate) {
 		this.flipNegate = flipNegate;
+		return this;
 	}
 
 	public Debugger getDebugger() {
 		return debugger;
 	}
 
-	public void setDebugger(Debugger debugger) {
+	public Options setDebugger(Debugger debugger) {
 		this.debugger = debugger;
+		return this;
+	}
+	
+	@Override
+	@SuppressWarnings("nls")
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		appendIfTrue(sb, "allowWindowsPaths", allowWindowsPaths);
+		appendIfTrue(sb, "nocomment", nocomment);
+		appendIfTrue(sb, "nonegate", nonegate);
+		appendIfTrue(sb, "nobrace", nobrace);
+		appendIfTrue(sb, "noglobstar", noglobstar);
+		appendIfTrue(sb, "nocase", nocase);
+		appendIfTrue(sb, "dot", dot);
+		appendIfTrue(sb, "noext", noext);
+		appendIfTrue(sb, "matchBase", matchBase);
+		appendIfTrue(sb, "flipNegate", flipNegate);
+		if (sb.length() > 0) {
+			sb.insert(0, "[");
+			sb.setLength(sb.length() - 2);
+			sb.append("]");
+			return sb.toString();
+		} else {
+			return "[]";
+		}
+	}
+	
+	private void appendIfTrue(StringBuilder str, String name, boolean value) {
+		if (value) {
+			str.append(name);
+			str.append("=true, "); //$NON-NLS-1$
+		}
 	}
 
 }
