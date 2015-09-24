@@ -27,6 +27,7 @@ import minimatch.isaacs.ExtglobEndingWithStateChar;
 import minimatch.java.FootTest;
 import minimatch.java.PatternWichStartsWithExcludeTest;
 import minimatch.java.PatternWichStartsWithSlashTest;
+import minimatch.java.TrickyNegationWithBarMinJs;
 
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
@@ -38,7 +39,8 @@ import org.junit.runners.Suite;
 	FootTest.class,
 	ExtglobEndingWithStateChar.class,
 	PatternWichStartsWithExcludeTest.class,
-	PatternWichStartsWithSlashTest.class
+	PatternWichStartsWithSlashTest.class,
+	TrickyNegationWithBarMinJs.class,
 })
 
 public class AllMinimatchTests {

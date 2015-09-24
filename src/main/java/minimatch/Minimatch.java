@@ -115,7 +115,7 @@ public class Minimatch {
 		this.parseNegate();
 
 		// step 2: expand braces
-		String[] set = /* this.globSet = */this.braceExpand(pattern, options);
+		String[] set = /* this.globSet = */this.braceExpand(this.pattern, this.options);
 
 		// if (options.debug) {
 		// this.debug = console.error
@@ -567,8 +567,7 @@ public class Minimatch {
 	}
 
 	private String[] expand(String pattern) {
-		// TODO Auto-generated method stub
-		return null;
+		return null;//BraceExpansion.expand(pattern);
 	}
 
 	public <T> boolean match(T f, PathAdapter<T> adapter) {
