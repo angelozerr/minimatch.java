@@ -6,4 +6,4 @@ Bundle-Localization: plugin
 Bundle-SymbolicName: minimatch.java
 Bundle-Version: 1.1.0.qualifier
 Bundle-RequiredExecutionEnvironment: JavaSE-1.6
-Export-Package: minimatch
+Export-Package: minimatch;version="1.1.0"
