@@ -126,10 +126,7 @@ public class Minimatch {
 		// step 2: expand braces
 		String[] set = /* this.globSet = */this.braceExpand(this.pattern, this.options);
 
-		// if (options.debug) {
-		// this.debug = console.error
-		// }
-		// this.debug(this.pattern, set)
+		this.debug("%s %s", this.pattern, Arrays.toString(set)); //$NON-NLS-1$
 
 		// step 3: now we have a set, so turn each one into a series
 		// of path-portion
@@ -137,11 +134,8 @@ public class Minimatch {
 		// These will be regexps, except in the case of "**", which is
 		// set to the GLOBSTAR object for globstar behavior,
 		// and will not contain any / characters
-		// set /* = this.globParts */ = set.map(function(s) {
-		// return s.split(slashSplit)
-		// })
 		String[][] globParts = globParts(set);
-		this.debug(this.pattern, (Object[])set);
+		this.debug("%s %s", this.pattern, toString(globParts));
 
 		// glob --> regexps
 		List<List<ParseItem>> results = globToRegExps(globParts);
@@ -150,15 +144,29 @@ public class Minimatch {
 		/*
 		 * set = set.filter(function (s) { return s.indexOf(false) === -1 })
 		 */
-		this.debug(this.pattern, (Object[])set);
+		this.debug("%s %s", this.pattern, results);
+		
 		this.set = results;
-
+	}
+	
+	private String toString(String[][] globParts) {
+		StringBuilder sb = new StringBuilder();
+		sb.append('[');
+		for (String[] arr: globParts) {
+			sb.append(Arrays.toString(arr));
+			sb.append(", ");
+		}
+		if (sb.length() > 1) {
+			sb.setLength(sb.length() - 2);
+		}
+		sb.append(']');
+		return sb.toString();
 	}
 
 	private String[][] globParts(String[] set) {
 		String[][] parts = new String[set.length][];
 		for (int i = 0; i < set.length; i++) {
-			parts[i] = slashSplit.split(set[i]);
+			parts[i] = slashSplit.split(set[i], Integer.MAX_VALUE);
 		}
 		return parts;
 	}
@@ -390,7 +398,7 @@ public class Minimatch {
 						// not a valid class!
 						ParseResult sp = this.parse(cs, true);
 						ctx.re = ctx.re.substring(0, reClassStart) + "\\["
-								+ sp.getItem() + "\\]";
+								+ sp.getItem().getSource() + "\\]";
 						ctx.hasMagic = ctx.hasMagic || sp.isB();
 						inClass = false;
 						continue;
@@ -428,7 +436,7 @@ public class Minimatch {
 			// any characters that were passed through as-is
 			String cs = pattern.substring(classStart + 1);
 			ParseResult sp = this.parse(cs, true);
-			ctx.re = ctx.re.substring(0, reClassStart) + "\\[" + sp.getItem();
+			ctx.re = ctx.re.substring(0, reClassStart) + "\\[" + sp.getItem().getSource();
 			ctx.hasMagic = ctx.hasMagic || sp.isB();
 		}
 
@@ -614,14 +622,12 @@ public class Minimatch {
 		return new String[] {pattern};
 	}
 
-	public <T> boolean match(T f, PathAdapter<T> adapter) {
-		return match(f, adapter, false);
-	}
+	private boolean match(List<String> f, boolean partial) {
 
-	public <T> boolean match(T f, PathAdapter<T> adapter, boolean partial) {
-		Options options = this.options;
+//		if ("/".equals(input) && partial)
+//			return true;
 		
-		this.debug(this.pattern, "split", f);
+		Options options = this.options;
 		
 		// just ONE of the pattern sets in this.set needs to match
 		// in order for it to be valid. If negating, then just one
@@ -629,14 +635,14 @@ public class Minimatch {
 		// Either way, return on the first hit.
 
 		List<List<ParseItem>> set = this.set;
-		this.debug(this.pattern, "set", set);
+		this.debug("%s %s %s", this.pattern, "set", set);
 		
 		// Find the basename of the path by looking for the last non-empty
 		// segment
 		String filename = null;
 		int i;
-		for (i = adapter.getLength(f) - 1; i >= 0; i--) {
-			filename = adapter.getPathName(f, i);
+		for (i = f.size() - 1; i >= 0; i--) {
+			filename = f.get(i);
 			// if (filename) break;
 			if (!StringUtils.isEmpty(filename))
 				break;
@@ -644,11 +650,12 @@ public class Minimatch {
 
 		for (i = 0; i < set.size(); i++) {
 			List<ParseItem> pattern = set.get(i);
-			T file = f;
+			List<String> file = f;
 			if (options.isMatchBase() && pattern.size() == 1) {
-				file = adapter.createPath(filename);
+				file = new ArrayList<String>();
+				file.add(filename);
 			}
-			boolean hit = this.matchOne(file, adapter, pattern, partial);
+			boolean hit = this.matchOne(file, pattern, partial);
 			if (hit) {
 				if (options.isFlipNegate())
 					return true;
@@ -672,21 +679,21 @@ public class Minimatch {
 	// Partial means, if you run out of file before you run
 	// out of pattern, then that's fine, as long as all
 	// the parts match.
-	private <T> boolean matchOne(T file, PathAdapter<T> adapter,
+	private <T> boolean matchOne(List<String> file,
 			List<ParseItem> pattern, boolean partial) {
 		Options options = this.options;
 
-		// //this.debug('matchOne',
-		// // { 'this': this, file: file, pattern: pattern })
-		this.debug("matchOne", adapter.getLength(file), pattern.size());
+		this.debug("matchOne\n\tOptions: %s\n\tfile: %s\n\tpattern: %s", options, file, pattern);
+		
+		this.debug("matchOne %s %s", file.size(), pattern.size());
 
-		int fi = 0, pi = 0, fl = adapter.getLength(file), pl = pattern.size();
+		int fi = 0, pi = 0, fl = file.size(), pl = pattern.size();
 		for (; (fi < fl) && (pi < pl); fi++, pi++) {
 			this.debug("matchOne loop");
 			ParseItem p = pattern.get(pi);
-			String f = adapter.getPathName(file, fi);
+			String f = file.get(fi);
 
-			// this.debug(pattern, p, f);
+			this.debug("%s %s %s", pattern, p, f);
 
 			// should be impossible.
 			// some invalid regexp stuff in the set.
@@ -695,7 +702,7 @@ public class Minimatch {
 			}
 
 			if (p instanceof GlobStar) {
-				this.debug("GLOBSTAR", pattern, p, f);
+				this.debug("GLOBSTAR [%s, %s, %s]", pattern, p, f);
 				// "**"
 				// a/**/b/**/c would match the following:
 				// a/b/x/y/z/c
@@ -729,10 +736,10 @@ public class Minimatch {
 					// . and .. are *never* matched by **, for explosively
 					// exponential reasons.
 					for (; fi < fl; fi++) {
-						String fileitem = adapter.getPathName(file, fi);
+						String fileitem = file.get(fi);
 						if (fileitem.equals(".")
 								|| fileitem.equals("..")
-								|| (!options.isDot() && fileitem.charAt(0) == '.'))
+								|| (!options.isDot() && fileitem.length() > 0 && fileitem.charAt(0) == '.'))
 							return false;
 					}
 					return true;
@@ -740,14 +747,14 @@ public class Minimatch {
 
 				// ok, let's see if we can swallow whatever we can.
 				while (fr < fl) {
-					String swallowee = adapter.getPathName(file, fr);
+					String swallowee = file.get(fr);
 
-					this.debug("\nglobstar while", file, fr, pattern, pr,
+					this.debug("\nglobstar while %s %s %s %s %s", file, fr, pattern, pr,
 							swallowee);
 					// XXX remove this slice. Just pass the start index.
-					if (this.matchOne(adapter.subPath(file, fr), adapter,
+					if (this.matchOne(file.subList(fr, file.size()),
 							pattern.subList(pr, pattern.size()), partial)) {
-						this.debug("globstar found match!", fr, fl,
+						this.debug("globstar found match! %s %s %s", fr, fl,
 								swallowee);
 						// found a match.
 						return true;
@@ -757,7 +764,7 @@ public class Minimatch {
 						if (swallowee.equals(".")
 								|| swallowee.equals("..")
 								|| (!options.isDot() && swallowee.charAt(0) == '.')) {
-							this.debug("dot detected!", file, fr, pattern,
+							this.debug("dot detected! %s %s %s %s", file, fr, pattern,
 									pr);
 							break;
 						}
@@ -774,7 +781,7 @@ public class Minimatch {
 				// If there's more *pattern* left, then
 				if (partial) {
 					// ran out of file
-					this.debug("\n>>> no match, partial?", file, fr,
+					this.debug("\n>>> no match, partial? %s %s %s %s", file, fr,
 							pattern, pr);
 					if (fr == fl)
 						return true;
@@ -786,8 +793,10 @@ public class Minimatch {
 			// non-magic patterns just have to match exactly
 			// patterns with magic have been turned into regexps.
 			if (!p.match(f, options)) {
+			    this.debug("pattern match %s %s false", p, f);
 				return false;
 			}
+		    this.debug("pattern match %s %s true", p, f);
 
 		}
 		// Note: ending in / means that we'll get a final ""
@@ -817,7 +826,7 @@ public class Minimatch {
 			// empty segment of a file with a trailing slash.
 			// a/* should match a/b/
 			boolean emptyFileEnd = (fi == fl - 1)
-					&& (adapter.getPathName(file, fi).equals(""));
+					&& (file.get(fi).equals(""));
 			return emptyFileEnd;
 		}
 
@@ -851,28 +860,28 @@ public class Minimatch {
 	}
 
 	public boolean match(String input, boolean partial) {
+		return match(input, DefaultPathAdapter.INSTANCE, partial);
+	}
+
+	public <T> boolean match(T f, PathAdapter<T> adapter) {
+		return match(f, adapter, false);
+	}
+
+	public <T> boolean match(T input, PathAdapter<T> adapter, boolean partial) {
 		this.debug("match %s %s", input, this.pattern);
 		
 		// short-circuit in the case of busted things.
 		// comments, etc.
 		if (this.comment)
 			return false;
+		
+		List<String> file = adapter.toArray(input, this.options);
+		
 		if (this.empty)
-			return StringUtils.isEmpty(input);
-
-		if ("/".equals(input) && partial)
-			return true;
-
-		Options options = this.options;
-
-		// windows: need to use /, not \
-		if (options.isAllowWindowsPaths()) {
-			input = StringUtils.replacePath(input);
-		}
-
-		// treat the test path as a set of pathparts.
-		List<String> f = Arrays.asList(slashSplit.split(input));
-		return match(f, DefaultPathAdapter.INSTANCE, partial);
+			return file.isEmpty();
+		
+		this.debug("%s %s %s", this.pattern, "split", file);
+		return match(file, partial);
 	}
 
 }
