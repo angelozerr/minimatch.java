@@ -27,6 +27,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
 import minimatch.isaacs.ExtglobEndingWithStateChar;
+import minimatch.isaacs.Patterns;
 import minimatch.isaacs.TrickyNegations;
 import minimatch.java.FootTest;
 import minimatch.java.PatternWichStartsWithExcludeTest;
@@ -35,7 +36,7 @@ import minimatch.java.TrickyNegationsToFix;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-//	Patterns.class,
+	Patterns.class,
 	TrickyNegations.class,
 	FootTest.class,
 	ExtglobEndingWithStateChar.class,
